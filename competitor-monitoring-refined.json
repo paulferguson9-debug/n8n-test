@@ -1,0 +1,323 @@
+{
+  "name": "Competitor Monitoring (Enhanced)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [{ "triggerAtHour": 6 }] }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [400, 400],
+      "id": "trigger-1",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "{\n  \"targets\": [\n    { \"competitor\": \"Awardco\", \"url\": \"https://www.awardco.com/plans\", \"page_type\": \"pricing\" },\n    { \"competitor\": \"O.C. Tanner\", \"url\": \"https://www.octanner.com\", \"page_type\": \"product\" },\n    { \"competitor\": \"Achievers\", \"url\": \"https://www.achievers.com\", \"page_type\": \"product\" },\n    { \"competitor\": \"Bonusly\", \"url\": \"https://bonus.ly/pricing\", \"page_type\": \"pricing\" },\n    { \"competitor\": \"Motivosity\", \"url\": \"https://www.motivosity.com/pricing\", \"page_type\": \"pricing\" },\n    { \"competitor\": \"Nectar\", \"url\": \"https://nectarhr.com/pricing\", \"page_type\": \"pricing\" }\n  ]\n}\n"
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [600, 400],
+      "id": "set-1",
+      "name": "Define Targets"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Convert targets array to individual items for loop processing\nconst targets = $input.first().json.targets;\n\nif (!targets || !Array.isArray(targets)) {\n  throw new Error('Invalid targets array');\n}\n\nreturn targets.map(target => ({\n  json: {\n    competitor: target.competitor,\n    url: target.url,\n    page_type: target.page_type,\n    timestamp: new Date().toISOString()\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [800, 400],
+      "id": "code-split",
+      "name": "Format List"
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1000, 400],
+      "id": "loop-start",
+      "name": "Loop Through Competitors"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 400],
+      "id": "http-fetch",
+      "name": "Fetch Page",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "id": "error-check",
+              "leftValue": "={{ $json.error }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists"
+              }
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1400, 400],
+      "id": "if-error",
+      "name": "Check Fetch Success"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Handle failed HTTP request\nconst competitor = $node[\"Loop Through Competitors\"].json.competitor;\nconst url = $node[\"Loop Through Competitors\"].json.url;\nconst error = $json.error?.message || 'Unknown error';\n\nreturn {\n  json: {\n    competitor,\n    url,\n    error,\n    status: 'failed',\n    timestamp: new Date().toISOString()\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1600, 300],
+      "id": "handle-error",
+      "name": "Handle Fetch Error"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Clean HTML and create content hash\nconst loopData = $node[\"Loop Through Competitors\"].json;\nconst body = $json.data || $json.body || '';\n\nif (!body) {\n  throw new Error('No content retrieved from page');\n}\n\n// Remove scripts, styles, and HTML tags\nconst cleaned = body\n  .replace(/<script[\\s\\S]*?<\\/script>/gi, '')\n  .replace(/<style[\\s\\S]*?<\\/style>/gi, '')\n  .replace(/<[^>]+>/g, ' ')\n  .replace(/\\s+/g, ' ')\n  .trim();\n\n// Create hash of content for change detection\nconst crypto = require('crypto');\nconst contentForHash = cleaned.slice(0, 10000);\nconst hash = crypto.createHash('sha256').update(contentForHash).digest('hex');\n\n// Store reasonable amount of text for AI analysis\nconst textForAnalysis = cleaned.slice(0, 8000);\n\nreturn {\n  json: {\n    competitor: loopData.competitor,\n    url: loopData.url,\n    page_type: loopData.page_type,\n    text: textForAnalysis,\n    hash: hash,\n    content_length: cleaned.length,\n    timestamp: new Date().toISOString()\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1600, 500],
+      "id": "clean-data",
+      "name": "Clean & Hash"
+    },
+    {
+      "parameters": {
+        "documentId": { "__rl": true, "value": "1mJMYvuzNbavVQ1UxayRPtxi4hoImqI1KR82ve_j2nHw", "mode": "list" },
+        "sheetName": { "__rl": true, "value": "Pages", "mode": "list" },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "url",
+              "lookupValue": "={{ $json.url }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1800, 500],
+      "id": "gs-lookup",
+      "name": "Lookup Existing",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "At3I2eIJiGljom0G",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "hash-compare",
+              "leftValue": "={{ $node[\"Clean & Hash\"].json.hash }}",
+              "rightValue": "={{ $json.hash || '' }}",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [2000, 500],
+      "id": "if-changed",
+      "name": "Content Changed?"
+    },
+    {
+      "parameters": {
+        "modelId": { "__rl": true, "value": "gpt-3.5-turbo", "mode": "list" },
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a competitive intelligence analyst. Analyze the provided webpage content and identify:\n1. Key pricing changes (if pricing page)\n2. New features or product updates\n3. Marketing message changes\n4. Significant layout or structure changes\n\nProvide a concise summary in 2-3 sentences focusing on business-relevant changes."
+            },
+            {
+              "role": "user",
+              "content": "Competitor: {{ $node[\"Clean & Hash\"].json.competitor }}\nPage Type: {{ $node[\"Clean & Hash\"].json.page_type }}\nURL: {{ $node[\"Clean & Hash\"].json.url }}\n\nContent:\n{{ $node[\"Clean & Hash\"].json.text }}"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.3,
+          "maxTokens": 200
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [2250, 400],
+      "id": "ai-node",
+      "name": "Analyze Change",
+      "credentials": {
+        "openAiApi": {
+          "id": "0IhSUk45pZHYyc80",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "__rl": true, "value": "1mJMYvuzNbavVQ1UxayRPtxi4hoImqI1KR82ve_j2nHw", "mode": "list" },
+        "sheetName": { "__rl": true, "value": 1750497703, "mode": "list" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ $node[\"Clean & Hash\"].json.timestamp }}",
+            "competitor": "={{ $node[\"Clean & Hash\"].json.competitor }}",
+            "url": "={{ $node[\"Clean & Hash\"].json.url }}",
+            "page_type": "={{ $node[\"Clean & Hash\"].json.page_type }}",
+            "change_summary": "={{ $json.message.content }}",
+            "content_length": "={{ $node[\"Clean & Hash\"].json.content_length }}"
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [2500, 400],
+      "id": "gs-log",
+      "name": "Log Change"
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "documentId": { "__rl": true, "value": "1mJMYvuzNbavVQ1UxayRPtxi4hoImqI1KR82ve_j2nHw", "mode": "list" },
+        "sheetName": { "__rl": true, "value": "Pages", "mode": "list" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "url": "={{ $node[\"Clean & Hash\"].json.url }}",
+            "competitor": "={{ $node[\"Clean & Hash\"].json.competitor }}",
+            "page_type": "={{ $node[\"Clean & Hash\"].json.page_type }}",
+            "hash": "={{ $node[\"Clean & Hash\"].json.hash }}",
+            "last_seen": "={{ $node[\"Clean & Hash\"].json.timestamp }}",
+            "content_length": "={{ $node[\"Clean & Hash\"].json.content_length }}",
+            "status": "=success"
+          },
+          "matchingColumns": ["url"]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [2750, 500],
+      "id": "gs-update",
+      "name": "Update Main Sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "At3I2eIJiGljom0G",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "__rl": true, "value": "1mJMYvuzNbavVQ1UxayRPtxi4hoImqI1KR82ve_j2nHw", "mode": "list" },
+        "sheetName": { "__rl": true, "value": "Errors", "mode": "list" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ $json.timestamp }}",
+            "competitor": "={{ $json.competitor }}",
+            "url": "={{ $json.url }}",
+            "error": "={{ $json.error }}",
+            "status": "={{ $json.status }}"
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1850, 300],
+      "id": "gs-error-log",
+      "name": "Log Error"
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [[{ "node": "Define Targets", "type": "main", "index": 0 }]]
+    },
+    "Define Targets": {
+      "main": [[{ "node": "Format List", "type": "main", "index": 0 }]]
+    },
+    "Format List": {
+      "main": [[{ "node": "Loop Through Competitors", "type": "main", "index": 0 }]]
+    },
+    "Loop Through Competitors": {
+      "main": [[{ "node": "Fetch Page", "type": "main", "index": 0 }]]
+    },
+    "Fetch Page": {
+      "main": [[{ "node": "Check Fetch Success", "type": "main", "index": 0 }]]
+    },
+    "Check Fetch Success": {
+      "main": [
+        [{ "node": "Handle Fetch Error", "type": "main", "index": 0 }],
+        [{ "node": "Clean & Hash", "type": "main", "index": 0 }]
+      ]
+    },
+    "Handle Fetch Error": {
+      "main": [[{ "node": "Log Error", "type": "main", "index": 0 }]]
+    },
+    "Log Error": {
+      "main": [[{ "node": "Loop Through Competitors", "type": "main", "index": 0 }]]
+    },
+    "Clean & Hash": {
+      "main": [[{ "node": "Lookup Existing", "type": "main", "index": 0 }]]
+    },
+    "Lookup Existing": {
+      "main": [[{ "node": "Content Changed?", "type": "main", "index": 0 }]]
+    },
+    "Content Changed?": {
+      "main": [
+        [{ "node": "Analyze Change", "type": "main", "index": 0 }],
+        [{ "node": "Update Main Sheet", "type": "main", "index": 0 }]
+      ]
+    },
+    "Analyze Change": {
+      "main": [[{ "node": "Log Change", "type": "main", "index": 0 }]]
+    },
+    "Log Change": {
+      "main": [[{ "node": "Update Main Sheet", "type": "main", "index": 0 }]]
+    },
+    "Update Main Sheet": {
+      "main": [[{ "node": "Loop Through Competitors", "type": "main", "index": 0 }]]
+    }
+  }
+}
