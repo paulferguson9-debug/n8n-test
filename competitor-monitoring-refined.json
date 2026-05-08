@@ -216,7 +216,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Format the competitor change as a Markdown entry for Obsidian\nconst cleanData = $node[\"Clean & Hash\"].json;\nconst aiSummary = $node[\"Analyze Change\"].json.message?.content || 'No summary available';\n\nconst date = new Date(cleanData.timestamp);\nconst dateStr = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });\nconst timeStr = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });\n\n// Build the Markdown block to append to the competitor's note\nconst noteEntry = [\n  '',\n  '---',\n  '',\n  `## ${dateStr} at ${timeStr}`,\n  '',\n  `**Page Type:** ${cleanData.page_type}`,\n  `**URL:** ${cleanData.url}`,\n  `**Content Length:** ${cleanData.content_length} chars`,\n  '',\n  '### Change Summary',\n  '',\n  aiSummary,\n  ''\n].join('\\n');\n\n// Encode path so spaces are safe in the URL\nconst safeName = encodeURIComponent(cleanData.competitor);\n\nreturn {\n  json: {\n    competitor: cleanData.competitor,\n    noteEntry,\n    notePath: `Competitor Intelligence/${safeName}.md`,\n    timestamp: cleanData.timestamp\n  }\n};"
+        "jsCode": "// Format the competitor change as a Markdown entry for Obsidian\nconst cleanData = $node[\"Clean & Hash\"].json;\nconst aiSummary = $node[\"Analyze Change\"].json.message?.content || 'No summary available';\n\nconst date = new Date(cleanData.timestamp);\nconst dateStr = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });\nconst timeStr = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });\n\nconst noteEntry = [\n  '',\n  '---',\n  '',\n  `## ${dateStr} at ${timeStr}`,\n  '',\n  `**Page Type:** ${cleanData.page_type}`,\n  `**URL:** ${cleanData.url}`,\n  `**Content Length:** ${cleanData.content_length} chars`,\n  '',\n  '### Change Summary',\n  '',\n  aiSummary,\n  ''\n].join('\\n');\n\nconst safeName = encodeURIComponent(cleanData.competitor);\n\nreturn {\n  json: {\n    competitor: cleanData.competitor,\n    noteEntry,\n    notePath: `Competitor Intelligence/${safeName}.md`,\n    timestamp: cleanData.timestamp\n  }\n};"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -233,7 +233,7 @@
           "parameters": [
             {
               "name": "Authorization",
-              "value": "=Bearer {{ $credentials.obsidianApiKey }}"
+              "value": "Bearer Gpvacn9oswVtEHfa"
             },
             {
               "name": "Content-Type",
@@ -254,13 +254,7 @@
       "position": [3000, 400],
       "id": "send-to-obsidian",
       "name": "Send to Obsidian",
-      "continueOnFail": true,
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "OBSIDIAN_CRED_ID",
-          "name": "Obsidian Local REST API"
-        }
-      }
+      "continueOnFail": true
     },
     {
       "parameters": {
