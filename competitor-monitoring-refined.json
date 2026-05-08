@@ -1,5 +1,5 @@
 {
-  "name": "Competitor Monitoring (Enhanced)",
+  "name": "Competitor Monitoring (Enhanced + Obsidian)",
   "nodes": [
     {
       "parameters": {
@@ -216,6 +216,54 @@
     },
     {
       "parameters": {
+        "jsCode": "// Format the competitor change as a Markdown entry for Obsidian\nconst cleanData = $node[\"Clean & Hash\"].json;\nconst aiSummary = $node[\"Analyze Change\"].json.message?.content || 'No summary available';\n\nconst date = new Date(cleanData.timestamp);\nconst dateStr = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });\nconst timeStr = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });\n\n// Build the Markdown block to append to the competitor's note\nconst noteEntry = [\n  '',\n  '---',\n  '',\n  `## ${dateStr} at ${timeStr}`,\n  '',\n  `**Page Type:** ${cleanData.page_type}`,\n  `**URL:** ${cleanData.url}`,\n  `**Content Length:** ${cleanData.content_length} chars`,\n  '',\n  '### Change Summary',\n  '',\n  aiSummary,\n  ''\n].join('\\n');\n\n// Encode path so spaces are safe in the URL\nconst safeName = encodeURIComponent(cleanData.competitor);\n\nreturn {\n  json: {\n    competitor: cleanData.competitor,\n    noteEntry,\n    notePath: `Competitor Intelligence/${safeName}.md`,\n    timestamp: cleanData.timestamp\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2750, 400],
+      "id": "format-obsidian-note",
+      "name": "Format Obsidian Note"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://localhost:27123/vault/{{ $json.notePath }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $credentials.obsidianApiKey }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "text/markdown"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "text/markdown",
+        "body": "={{ $json.noteEntry }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3000, 400],
+      "id": "send-to-obsidian",
+      "name": "Send to Obsidian",
+      "continueOnFail": true,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "OBSIDIAN_CRED_ID",
+          "name": "Obsidian Local REST API"
+        }
+      }
+    },
+    {
+      "parameters": {
         "operation": "upsert",
         "documentId": { "__rl": true, "value": "1mJMYvuzNbavVQ1UxayRPtxi4hoImqI1KR82ve_j2nHw", "mode": "list" },
         "sheetName": { "__rl": true, "value": "Pages", "mode": "list" },
@@ -236,7 +284,7 @@
       },
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
-      "position": [2750, 500],
+      "position": [3250, 500],
       "id": "gs-update",
       "name": "Update Main Sheet",
       "credentials": {
@@ -314,6 +362,12 @@
       "main": [[{ "node": "Log Change", "type": "main", "index": 0 }]]
     },
     "Log Change": {
+      "main": [[{ "node": "Format Obsidian Note", "type": "main", "index": 0 }]]
+    },
+    "Format Obsidian Note": {
+      "main": [[{ "node": "Send to Obsidian", "type": "main", "index": 0 }]]
+    },
+    "Send to Obsidian": {
       "main": [[{ "node": "Update Main Sheet", "type": "main", "index": 0 }]]
     },
     "Update Main Sheet": {
